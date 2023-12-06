@@ -44,7 +44,7 @@ class FaissANN:
         return distances, indices
 
 
-def validate(
+def validate_real(
     faiss_ann: FaissANN,
     train_df: pd.DataFrame,
     test_df: pd.DataFrame,
@@ -65,7 +65,7 @@ def validate(
     return round(correct_predictions / total_predictions, 3), throughput
 
 
-def run_validation_tests(
+def run_validation_tests_for_real(
     path_to_dataframe: str | Path,
     num_clusters_list: List[int],
     test_size: float = 0.1,
@@ -79,8 +79,37 @@ def run_validation_tests(
     for num_clusters in num_clusters_list:
         faiss_ann = FaissANN(num_clusters=num_clusters, use_gpu=use_gpu)
         faiss_ann.train(train_df[embedding_column].tolist())
-        accuracy, throughput = validate(faiss_ann, train_df, test_df)
+        accuracy, throughput = validate_real(faiss_ann, train_df, test_df)
         print(f"Number of clusters: {num_clusters}, accuracy: {accuracy}, throughput: {throughput}")
+
+
+def validate_synthetic(
+    faiss_ann: FaissANN,
+    df: pd.DataFrame,
+    msg: str = "",
+) -> None:
+    for emb, _, _ in tqdm(df.values, desc=msg):
+        faiss_ann.search([emb], k=1)
+
+
+def run_validation_tests_for_synthetic(
+    path_to_dataframe: str | Path,
+    num_clusters_list: List[int],
+    size_limits_list: List[int],
+    test_size: float = 0.1,
+    use_gpu: bool = False,
+    embedding_column: str = "embedding",
+):
+    df = pd.read_parquet(path_to_dataframe)[[embedding_column, "intent", "target"]]
+
+    train_df, test_df = train_test_split(df, test_size=test_size, random_state=42)
+    for num_clusters, size_limit in zip(num_clusters_list, size_limits_list):
+        faiss_ann = FaissANN(num_clusters=num_clusters, use_gpu=use_gpu)
+        faiss_ann.train(train_df[embedding_column].tolist())
+        device = "GPU" if use_gpu else "CPU"
+        validate_synthetic(
+            faiss_ann=faiss_ann, df=test_df[:size_limit], msg=f"{device}, with clusters = {num_clusters}"
+        )
 
 
 def main():
@@ -95,20 +124,28 @@ def main():
     path_to_root = Path(__file__).parent.parent
     path_to_data = path_to_root / "data"
 
+    print(f"Running validation tests for: {data_type} data `{embedding_column}`...")
+
     if data_type == "real":
-        path_to_real_dataframe = Path(path_to_data / "xlm-roberta-embeddings.parquet")
+        run_validation_tests_for_real(
+            path_to_dataframe=Path(path_to_data / "xlm-roberta-embeddings.parquet"),
+            num_clusters_list=[0, 8, 16, 32, 64, 128],
+            embedding_column=embedding_column,
+            test_size=0.2,
+        )
+
     elif data_type == "synthetic":
-        path_to_real_dataframe = Path(path_to_data / "xlm-roberta-synthetic-embeddings.parquet")
+        run_validation_tests_for_synthetic(
+            path_to_dataframe=Path(path_to_data / "xlm-roberta-synthetic-embeddings.parquet"),
+            num_clusters_list=[0, 8, 16, 32, 64, 128],
+            size_limits_list=[1000, 2000, 5000, 10000, 20000, 25000],
+            embedding_column=embedding_column,
+            test_size=0.2,
+        )
+
     else:
         raise ValueError(f"Unknown data type: {data_type}")
 
-    print(f"Running validation tests for: {data_type} data `{embedding_column}`...")
-    run_validation_tests(
-        path_to_dataframe=path_to_real_dataframe,
-        num_clusters_list=[0, 8, 16, 32, 64, 128],
-        embedding_column=embedding_column,
-        test_size=0.2,
-    )
     print("Done.")
 
 
