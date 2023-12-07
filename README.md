@@ -1,5 +1,8 @@
 # ann-index-experiments
 
+[![Python](https://img.shields.io/badge/python-3.10-blue.svg)](https://www.python.org/downloads/release/python-3100/)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+
 This repository contains the example of the `approximate nearest neighbors`
 search algorithms usage.
 
@@ -46,4 +49,8 @@ search algorithms usage.
 
 ### How to start?
 
-1. TODO
+1. Download the dataset using `make download_dataset` command.
+2. Run the `make run_embedding_generator` command to generate embeddings for the
+   dataset.
+3. Run the `make run_test` command to build the index and measure the
+   `throughput` and `validation accuracy`.
